@@ -33,17 +33,29 @@
     <h2>Email confirmation</h2>
     <p id="message">You can now return to My Digital Binder and sign in.</p>
   </main>
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const type = params.get("type") || hash.get("type");
-    const error = params.get("error") || hash.get("error");
+  
+<script>
+  // Remove authentication tokens from the visible URL immediately.
+  const params = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.slice(1));
 
-    document.getElementById("message").textContent = error
-      ? "Confirmation failed. Please return to the app and try again."
-      : type === "signup"
-        ? "Your email confirmation link has been processed. Return to My Digital Binder and sign in."
-        : "If you have confirmed your email, return to My Digital Binder and sign in.";
-  </script>
+  const error = params.get("error") || hash.get("error");
+  const type = params.get("type") || hash.get("type");
+
+  window.history.replaceState(
+    null,
+    "",
+    window.location.pathname
+  );
+
+  const message = document.getElementById("message");
+
+  message.textContent = error
+    ? "Email confirmation failed. Please return to My Digital Binder and try again."
+    : type === "signup"
+      ? "Your email confirmation link has been processed. Return to My Digital Binder and sign in."
+      : "If you confirmed your email, return to My Digital Binder and sign in.";
+</script>
+
 </body>
 </html>
