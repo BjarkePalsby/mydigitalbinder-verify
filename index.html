@@ -52,7 +52,9 @@
   const form = document.getElementById("reset-form");
   const button = document.getElementById("submit");
   const showError = text => { message.textContent = text; message.classList.add("error"); };
-  const recovery = type === "recovery";
+  // Supabase PKCE redirects can contain only ?code=... without type=recovery.
+  // Signup confirmations normally arrive without a code on this static page.
+  const recovery = type === "recovery" || (!!code && type !== "signup") || (!!tokenHash && type !== "signup") || (!!accessToken && !!refreshToken && type !== "signup");
   if (!recovery) {
     message.textContent = error
       ? "Email confirmation failed. Please return to My Digital Binder and try again."
