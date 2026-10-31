@@ -1,61 +1,117 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Email Verified | My Digital Binder</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0B1220;
-      color: #CBD5E1;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-    main {
-      max-width: 420px;
-      padding: 32px;
-    }
-    h1 { color: #D4AF37; }
-    p { line-height: 1.7; }
-    .mark { color: #D4AF37; font-size: 42px; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My Digital Binder | Account</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0B1220; color:#CBD5E1; font-family:Arial,sans-serif; text-align:center; }
+  main { width:100%; max-width:440px; padding:32px 24px; }
+  h1 { color:#D4AF37; font-size:29px; }
+  p { line-height:1.7; }
+  .mark { color:#D4AF37; font-size:42px; }
+  form { margin-top:24px; text-align:left; }
+  label { display:block; margin:15px 0 7px; font-size:14px; }
+  input { width:100%; padding:13px; border-radius:8px; border:1px solid #475569; background:#172338; color:white; font-size:16px; }
+  button { width:100%; margin-top:22px; padding:14px; border:0; border-radius:8px; background:#D4AF37; color:#0B1220; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.55; cursor:wait; }
+  .error { color:#FDA4AF; }
+  [hidden] { display:none !important; }
+</style>
 </head>
 <body>
-  <main>
-    <div class="mark">✓</div>
-    <h1>MY DIGITAL BINDER</h1>
-    <h2>Email confirmation</h2>
-    <p id="message">You can now return to My Digital Binder and sign in.</p>
-  </main>
-  
-<script>
-  // Remove authentication tokens from the visible URL immediately.
-  const params = new URLSearchParams(window.location.search);
+<main>
+  <div class="mark">✓</div>
+  <h1>MY DIGITAL BINDER</h1>
+  <h2 id="heading">Email confirmation</h2>
+  <p id="message">If you confirmed your email, return to My Digital Binder and sign in.</p>
+  <form id="reset-form" hidden>
+    <label for="password">New password</label>
+    <input id="password" type="password" autocomplete="new-password" minlength="8" required />
+    <label for="confirm">Confirm new password</label>
+    <input id="confirm" type="password" autocomplete="new-password" minlength="8" required />
+    <p>Use at least 8 characters, including uppercase, lowercase and a special character.</p>
+    <button id="submit" type="submit">SAVE NEW PASSWORD</button>
+  </form>
+</main>
+<script type="module">
+  const query = new URLSearchParams(window.location.search);
   const hash = new URLSearchParams(window.location.hash.slice(1));
-
-  const error = params.get("error") || hash.get("error");
-  const type = params.get("type") || hash.get("type");
-
-  window.history.replaceState(
-    null,
-    "",
-    window.location.pathname
-  );
-
+  const get = key => hash.get(key) || query.get(key);
+  const type = get("type");
+  const error = get("error") || get("error_description");
+  const accessToken = get("access_token");
+  const refreshToken = get("refresh_token");
+  const tokenHash = get("token_hash");
+  const code = get("code");
+  // Remove sensitive credentials from browser history before loading any dependencies.
+  window.history.replaceState(null, "", window.location.pathname);
+  const heading = document.getElementById("heading");
   const message = document.getElementById("message");
-
-  message.textContent = error
-    ? "Email confirmation failed. Please return to My Digital Binder and try again."
-    : type === "signup"
-      ? "Your email confirmation link has been processed. Return to My Digital Binder and sign in."
-      : "If you confirmed your email, return to My Digital Binder and sign in.";
+  const form = document.getElementById("reset-form");
+  const button = document.getElementById("submit");
+  const showError = text => { message.textContent = text; message.classList.add("error"); };
+  const recovery = type === "recovery";
+  if (!recovery) {
+    message.textContent = error
+      ? "Email confirmation failed. Please return to My Digital Binder and try again."
+      : type === "signup"
+        ? "Your email confirmation link has been processed. Return to My Digital Binder and sign in."
+        : "If you confirmed your email, return to My Digital Binder and sign in.";
+  } else {
+    heading.textContent = "Reset password";
+    message.textContent = "Checking your password reset link…";
+    if (error) {
+      showError("This password reset link is invalid or expired. Request a new link in My Digital Binder.");
+    } else {
+      try {
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const client = createClient(
+          "https://wgrniwtxbdlsqkpshjam.supabase.co",
+          "sb_publishable_VSd-uiOguIhoPi7TGsKqiQ_rO1Ql-Xg",
+          { auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false } }
+        );
+        let result;
+        if (accessToken && refreshToken) {
+          result = await client.auth.setSession({ access_token:accessToken, refresh_token:refreshToken });
+        } else if (tokenHash) {
+          result = await client.auth.verifyOtp({ token_hash:tokenHash, type:"recovery" });
+        } else if (code) {
+          result = await client.auth.exchangeCodeForSession(code);
+        } else {
+          throw new Error("Missing recovery credentials");
+        }
+        if (result.error || !result.data?.session) throw result.error || new Error("Invalid session");
+        message.textContent = "Choose a new password for your account.";
+        form.hidden = false;
+        form.addEventListener("submit", async event => {
+          event.preventDefault();
+          const password = document.getElementById("password").value;
+          const confirm = document.getElementById("confirm").value;
+          if (password !== confirm) { showError("Passwords do not match."); return; }
+          if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+            showError("Use at least 8 characters, including uppercase, lowercase and a special character."); return;
+          }
+          button.disabled = true;
+          message.classList.remove("error");
+          message.textContent = "Updating password…";
+          const { error: updateError } = await client.auth.updateUser({ password });
+          if (updateError) {
+            showError("Could not update password: " + updateError.message);
+            button.disabled = false;
+            return;
+          }
+          await client.auth.signOut({ scope:"local" });
+          form.hidden = true;
+          heading.textContent = "Password updated";
+          message.textContent = "Your password has been changed. Return to My Digital Binder and sign in with your new password.";
+        });
+      } catch {
+        showError("This password reset link is invalid or expired. Request a new link in My Digital Binder.");
+      }
+    }
+  }
 </script>
-
 </body>
 </html>
